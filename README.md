@@ -19,6 +19,19 @@ Kiko shows a simple face with two glossy eyes and a small mouth. It blinks, glan
   <img src="docs/screenshots/activity_search_island.png" width="420" alt="Web search indicator in landscape, below the Dynamic Island">
 </p>
 
+## Download
+
+Get the latest signed APK from **[Releases](https://github.com/ejatapibeda/kiko-companion/releases/latest)** and open it on your device (allow installing from your browser or file manager when asked).
+
+| APK | Pick it for |
+|---|---|
+| `kiko-companion-v<version>-arm64-v8a.apk` | **Most phones and tablets** (64-bit) |
+| `kiko-companion-v<version>-armeabi-v7a.apk` | Older 32-bit phones and tablets |
+| `kiko-companion-v<version>-x86_64.apk` | Emulators and x86 Chromebooks |
+| `kiko-companion-v<version>-universal.apk` | Not sure which one: works everywhere, bigger download |
+
+Each release has a `SHA256SUMS.txt` to check the download, and the changes are listed in [CHANGELOG.md](CHANGELOG.md). Release APKs use the project's release key, so they can't be installed over a debug build you compiled yourself; uninstall that first (its settings are cleared). Your installed version is shown in **Settings → About**.
+
 ## Features
 
 - **Voice chat.** Push the mic button or use the wake word. Speech is transcribed by Whisper (Groq by default), answered by an LLM with tool calling (`openai/gpt-oss-120b` on Groq by default), and spoken back while the mouth follows the audio level.
@@ -66,6 +79,7 @@ You need JDK 17 and the Android SDK (platform 34). Create `local.properties` wit
 ```bash
 ./gradlew assembleDebug        # per-ABI APKs + app-universal-debug.apk in app/build/outputs/apk/debug/
 ./gradlew assembleCompact      # smaller debug build (R8 + resource shrinking) in app/build/outputs/apk/compact/
+./gradlew assembleRelease      # kiko-companion-v<version>-<abi>.apk in app/build/outputs/apk/release/ (signed if a keystore is configured)
 ./gradlew testDebugUnitTest    # unit tests (logic, parsers, cloud pipeline with MockWebServer)
 ./gradlew recordPaparazziDebug # re-render face/player/settings snapshots into app/src/test/snapshots/images/
 ```
@@ -106,4 +120,6 @@ See [docs/development.md](docs/development.md) for tests, live tests, debug-only
 
 **Kiko** adalah asisten suara AI berwajah lucu untuk Android (Kotlin + Jetpack Compose). Panggil dengan wake word "Hey Jarvis" atau tombol mic, atau pakai mode chat (bisa kirim gambar & file .txt). Fitur: indikator aktivitas (wajah, pil status, dan baris status di chat menunjukkan Kiko lagi mikir, nyari di web, memutar Spotify, cek cuaca, dll), Dynamic Island + lirik, kontrol Spotify, wajah bereaksi terhadap cuaca, joget saat musik, animasi tidur, rantai TTS (TikTok gratis → Android TTS), peredam bising + sensitivitas mic, dan pencarian web gratis tanpa key (Tavily keyless → SearXNG → DuckDuckGo → Wikipedia).
 
-Mulai cepat: build dengan `./gradlew assembleDebug`, pasang APK, pilih bahasa, buka **Pengaturan → Otak (LLM)**, tempel API key Groq gratis dari https://console.groq.com/keys, lalu **Simpan**. Penjelasan setiap layanan ada di [docs/services.md](docs/services.md), dan setup Spotify ada di [docs/spotify.md](docs/spotify.md). Backend Spotify self-hosted: https://github.com/ejatapibeda/spotapi-backend
+**Unduh:** ambil APK dari [Releases](https://github.com/ejatapibeda/kiko-companion/releases/latest). Kebanyakan HP/tablet pakai **arm64-v8a**, tablet/HP lama 32-bit pakai **armeabi-v7a**, ragu pakai **universal**. Versi terpasang terlihat di **Pengaturan → Tentang**.
+
+Mulai cepat (build sendiri): build dengan `./gradlew assembleDebug`, pasang APK, pilih bahasa, buka **Pengaturan → Otak (LLM)**, tempel API key Groq gratis dari https://console.groq.com/keys, lalu **Simpan**. Penjelasan setiap layanan ada di [docs/services.md](docs/services.md), dan setup Spotify ada di [docs/spotify.md](docs/spotify.md). Backend Spotify self-hosted: https://github.com/ejatapibeda/spotapi-backend

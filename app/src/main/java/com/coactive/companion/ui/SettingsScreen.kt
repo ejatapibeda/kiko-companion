@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.ExpandMore
@@ -274,6 +275,8 @@ fun SettingsScreen(
 
                 SpotifySettingsSection(d, { d = it }, spotifyStatus, onSpotifyLogin, onSpotifyLogout, onSpotapiPair, onSpotapiConnect, onSpotapiDisconnect, onSpotapiCheck)
 
+                AboutCard()
+
                 Button(onClick = { onSave(d) }, shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.fillMaxWidth().height(52.dp).testTag("saveBottom")) {
                     Text(stringResource(R.string.save), fontWeight = FontWeight.SemiBold)
@@ -287,6 +290,22 @@ fun SettingsScreen(
 /* ------------------------------------------------------------------ */
 /*  Komponen kecil                                                     */
 /* ------------------------------------------------------------------ */
+
+/** Versi aplikasi + tautan ke kode sumber & halaman rilis (unduh APK). */
+@Composable
+private fun AboutCard() {
+    val uri = androidx.compose.ui.platform.LocalUriHandler.current
+    val cs = MaterialTheme.colorScheme
+    SettingsCard(stringResource(R.string.settings_about_title), Icons.Filled.Info) {
+        val build = if (com.coactive.companion.BuildConfig.DEBUG) " · " + stringResource(R.string.settings_about_debug) else ""
+        Text(stringResource(R.string.settings_about_version, com.coactive.companion.BuildConfig.VERSION_NAME, com.coactive.companion.BuildConfig.VERSION_CODE) + build,
+            style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("appVersion"))
+        Text(stringResource(R.string.settings_about_releases), style = MaterialTheme.typography.labelLarge, color = cs.primary,
+            modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { runCatching { uri.openUri(RELEASES_URL) } }.padding(vertical = 4.dp))
+    }
+}
+
+private const val RELEASES_URL = "https://github.com/ejatapibeda/kiko-companion/releases"
 
 /** Kartu satu bagian: ikon dalam lingkaran berwarna aksen + judul, lalu isi dengan jarak seragam. */
 @Composable

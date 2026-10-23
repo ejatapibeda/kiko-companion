@@ -1,0 +1,89 @@
+name: Release
+
+# Builds signed release APKs when a v* tag is pushed and attaches them to the GitHub Release.
+# Needs the repository secrets KIKO_KEYSTORE_BASE64, KIKO_KEYSTORE_PASSWORD, KIKO_KEY_ALIAS and
+# KIKO_KEY_PASSWORD (see docs/development.md). Without them the job is skipped and no release is created.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      KIKO_KEYSTORE_BASE64: ${{ secrets.KIKO_KEYSTORE_BASE64 }}
+      KIKO_KEYSTORE_PASSWORD: ${{ secrets.KIKO_KEYSTORE_PASSWORD }}
+      KIKO_KEY_ALIAS: ${{ secrets.KIKO_KEY_ALIAS }}
+      KIKO_KEY_PASSWORD: ${{ secrets.KIKO_KEY_PASSWORD }}
+    steps:
+      - name: Check signing secrets
+        id: secrets
+        run: |
+          if [ -n "$KIKO_KEYSTORE_BASE64" ] && [ -n "$KIKO_KEYSTORE_PASSWORD" ] && [ -n "$KIKO_KEY_ALIAS" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Signing secrets are not set; skipping the release build (no release is created)."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.secrets.outputs.ok == 'true'
+      - uses: actions/setup-java@v4
+        if: steps.secrets.outputs.ok == 'true'
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+        if: steps.secrets.outputs.ok == 'true'
+      - uses: gradle/actions/setup-gradle@v4
+        if: steps.secrets.outputs.ok == 'true'
+
+      - name: Check tag matches versionName
+        if: steps.secrets.outputs.ok == 'true'
+        run: |
+          v=$(sed -n 's/^kiko.versionName=//p' gradle.properties)
+          if [ "v$v" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match kiko.versionName=$v in gradle.properties"; exit 1
+          fi
+
+      - name: Decode keystore
+        if: steps.secrets.outputs.ok == 'true'
+        run: |
+          echo "$KIKO_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/kiko-release.jks"
+          echo "KIKO_KEYSTORE_FILE=$RUNNER_TEMP/kiko-release.jks" >> "$GITHUB_ENV"
+
+      - name: Test and build signed release APKs
+        if: steps.secrets.outputs.ok == 'true'
+        run: ./gradlew testReleaseUnitTest assembleRelease --stacktrace
+
+      - name: Verify signatures and write checksums
+        if: steps.secrets.outputs.ok == 'true'
+        run: |
+          cd app/build/outputs/apk/release
+          ls kiko-companion-*.apk
+          if ls *-unsigned.apk >/dev/null 2>&1; then echo "::error::APKs were not signed"; exit 1; fi
+          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          for f in kiko-companion-*.apk; do "$apksigner" verify "$f"; done
+          sha256sum kiko-companion-*.apk > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create or update the GitHub Release
+        if: steps.secrets.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes="docs/release-notes/${GITHUB_REF_NAME}.md"
+          [ -f "$notes" ] || notes=CHANGELOG.md
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --title "Kiko Companion $GITHUB_REF_NAME" --notes-file "$notes" --verify-tag
+          gh release upload "$GITHUB_REF_NAME" app/build/outputs/apk/release/kiko-companion-*.apk \
+            app/build/outputs/apk/release/SHA256SUMS.txt --clobber
+
+      - name: Remove keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/kiko-release.jks"

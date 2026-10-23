@@ -18,7 +18,71 @@
 |---|---|
 | `./gradlew assembleDebug` | Per-ABI APKs (`arm64-v8a`, `armeabi-v7a`, `x86_64`) and `app-universal-debug.apk` |
 | `./gradlew assembleCompact` | Debug-signed, debuggable build with R8 + resource shrinking (smallest APKs) |
-| `./gradlew assembleRelease` | Unsigned release. Configure your own signing; keystores are git-ignored. |
+| `./gradlew assembleRelease` | R8-minified release APKs `kiko-companion-v<version>-<abi>.apk` (plus `-universal`). Signed when a keystore is configured (see below), otherwise named `…-unsigned.apk`. |
+
+## Versioning
+
+The version has one source: `kiko.versionName` in `gradle.properties` (e.g. `1.0.0`). `versionCode` is derived as
+`major * 10000 + minor * 100 + patch` (1.0.0 → 10000). It's shown in **Settings → About**.
+
+To release: bump `kiko.versionName`, add a `CHANGELOG.md` entry and `docs/release-notes/v<version>.md`, commit, then
+push a tag `v<version>` (the release workflow checks that the tag matches).
+
+## Release signing
+
+Release builds are signed when Gradle finds a keystore, in this order:
+
+1. Environment variables: `KIKO_KEYSTORE_FILE`, `KIKO_KEYSTORE_PASSWORD`, `KIKO_KEY_ALIAS`, `KIKO_KEY_PASSWORD`
+   (the key password falls back to the store password).
+2. A properties file from `KIKO_KEYSTORE_PROPERTIES=/path/to/keystore.properties`, `-Pkiko.keystoreProperties=…`,
+   or `keystore.properties` in the project root:
+   ```properties
+   storeFile=kiko-release.jks      # relative paths are resolved next to the properties file
+   storePassword=…
+   keyAlias=kiko
+   keyPassword=…
+   ```
+
+Without either, `assembleRelease` still works and produces unsigned APKs. `keystore.properties`, `*.jks`,
+`*.keystore` and `*.p12` are git-ignored; keep the real keystore outside the repository and **back it up**. Losing it
+means future releases can't update existing installs.
+
+Create a keystore (PKCS12, so the key password equals the store password):
+
+```bash
+keytool -genkeypair -keystore kiko-release.jks -storetype PKCS12 -alias kiko \
+  -keyalg RSA -keysize 4096 -validity 36500 -dname "CN=Kiko Companion"
+```
+
+Check a build with `apksigner verify --print-certs app/build/outputs/apk/release/kiko-companion-v1.0.0-arm64-v8a.apk`.
+
+## GitHub Actions
+
+- **`ci.yml`** runs `testDebugUnitTest` and `verifyPaparazziDebug` on pull requests and pushes to `main`, and uploads
+  the test reports and snapshot diffs when something fails.
+- **`release.yml`** runs on `v*` tags. It runs the release unit tests, builds the signed APKs, verifies them with
+  `apksigner`, writes `SHA256SUMS.txt` and creates the GitHub Release (notes from `docs/release-notes/<tag>.md`) or
+  uploads to an existing one. If the signing secrets are missing, the job skips with a notice and creates nothing.
+
+Repository secrets for `release.yml` (Settings → Secrets and variables → Actions):
+
+| Secret | Value |
+|---|---|
+| `KIKO_KEYSTORE_BASE64` | The keystore file, base64-encoded |
+| `KIKO_KEYSTORE_PASSWORD` | Keystore password |
+| `KIKO_KEY_ALIAS` | Key alias (e.g. `kiko`) |
+| `KIKO_KEY_PASSWORD` | Key password (same as the store password for PKCS12) |
+
+With the GitHub CLI (it prompts for the password values, so they stay out of your shell history):
+
+```bash
+base64 -w0 kiko-release.jks | gh secret set KIKO_KEYSTORE_BASE64
+gh secret set KIKO_KEYSTORE_PASSWORD
+gh secret set KIKO_KEY_ALIAS --body kiko
+gh secret set KIKO_KEY_PASSWORD
+```
+
+On Windows PowerShell, encode with `[Convert]::ToBase64String([IO.File]::ReadAllBytes("kiko-release.jks")) | gh secret set KIKO_KEYSTORE_BASE64`.
 
 ## Tests
 

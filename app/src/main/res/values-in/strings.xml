@@ -255,4 +255,8 @@
     <string name="step_dance">Joget</string>
     <string name="step_tool">Alat</string>
     <string name="step_failed">gagal</string>
+    <string name="settings_about_title">Tentang</string>
+    <string name="settings_about_version">Versi %1$s (%2$d)</string>
+    <string name="settings_about_debug">build debug</string>
+    <string name="settings_about_releases">Kode sumber &amp; rilis (unduh APK)</string>
 </resources>
