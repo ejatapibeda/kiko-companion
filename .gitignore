@@ -1,0 +1,31 @@
+# Gradle / build
+.gradle/
+build/
+**/build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Local config & secrets (never commit)
+local.properties
+keystore.properties
+*.jks
+*.keystore
+*.p12
+.env
+.env.*
+secrets/
+.secrets/
+settings_sync.json
+google-services.json
+
+# Outputs
+*.apk
+*.aab
+*.zip
+artifacts/

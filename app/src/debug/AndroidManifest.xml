@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- HANYA build debug: memudahkan isi pengaturan via adb (tidak ada di APK release). -->
+        <receiver android:name=".DebugConfigReceiver" android:exported="true" android:permission="android.permission.DUMP">
+            <intent-filter><action android:name="com.coactive.companion.DEBUG_CONFIG" /></intent-filter>
+        </receiver>
+    </application>
+</manifest>
