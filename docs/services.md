@@ -17,6 +17,8 @@ All keys you enter are stored encrypted on the device (EncryptedSharedPreference
 | Spotify (local / Web API / spotapi backend) | Music control, now playing, lyrics | Depends on mode | Spotify |
 | openWakeWord (on device) | Wake word detection | No (offline) | Wake word |
 
+The activity indicators (status pill, face animations, chat status row) are drawn locally from the app's own tool events and contact no service.
+
 ---
 
 ## LLM: Groq (default)
@@ -64,7 +66,7 @@ Settings → **Voice (TTS)**. A "Test voice" button plays a sample. Whatever the
 
 ## Web search
 
-The LLM gets two tools:
+The LLM gets two tools (while they run, the face shows an orbiting magnifier or a "reading" bubble and the status pill shows the query or the page's host; see [development.md](development.md#activity-indicators)):
 
 - **`web_search`** returns the top results (title, URL, snippet). The assistant answers briefly in your language. In voice mode it never reads URLs aloud. In chat mode the sources appear as tappable links under the reply.
 - **`browse_web`** reads one page. It uses Exa contents if an Exa key is set, otherwise Tavily `/extract` (keyless or keyed), and finally `r.jina.ai` as a fallback.
@@ -99,7 +101,7 @@ Keys are entered in masked fields and included in the app's settings export/impo
 
 There are three modes (Settings → **Spotify → Spotify source**): **Local** (no setup), **Official Spotify** (Web API with OAuth PKCE; control needs Premium) and **spotapi** (a self-hosted backend that also provides now-playing details, devices and **lyrics**). Lyrics are fetched by the backend from Spotify's color-lyrics endpoint, with a fallback to [lrclib.net](https://lrclib.net) (free, no key). The app itself never contacts lrclib.
 
-Full setup is in [spotify.md](spotify.md).
+The backend is open source: [ejatapibeda/spotapi-backend](https://github.com/ejatapibeda/spotapi-backend) (FastAPI + Docker, GPL-3.0). Full setup is in [spotify.md](spotify.md) and the backend's README.
 
 ## Wake word (on device)
 
