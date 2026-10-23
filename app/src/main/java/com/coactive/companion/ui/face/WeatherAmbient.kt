@@ -12,6 +12,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -30,7 +34,7 @@ enum class WeatherScene { RAIN, COLD, HOT }
 /**
  * Efek cuaca ambient layar penuh di belakang wajah (gaya sama dengan not musik joget: partikel Canvas ringan):
  * - HUJAN: garis hujan tipis miring + riak kecil di bawah + rona kebiruan,
- * - DINGIN: salju melayang + bingkai embun beku di tepi + rona biru + sesekali uap napas di dekat mulut,
+ * - DINGIN: kepingan salju 6 lengan bercabang (+ butiran kecil) melayang berputar pelan + bingkai embun beku di tepi + rona biru + sesekali uap napas di dekat mulut,
  * - PANAS: rona oranye hangat + cahaya matahari lembut di pojok + partikel hangat naik + gelombang fatamorgana
  *   + sesekali tetes keringat di pelipis.
  * Partikel dihitung dari waktu (deterministik, tanpa alokasi per partikel). Jam hanya berjalan saat efek terlihat,
@@ -38,7 +42,9 @@ enum class WeatherScene { RAIN, COLD, HOT }
  */
 @Composable
 fun WeatherAmbient(scene: WeatherScene?, dark: Boolean, modifier: Modifier = Modifier) {
-    val amount = remember { Animatable(0f) }
+    val fixedTime = LocalWeatherPreviewTime.current ?: if (LocalInspectionMode.current) 7.3f else null
+    val preview = fixedTime != null // snapshot/preview: tampil penuh pada waktu tetap (deterministik), tanpa jam
+    val amount = remember { Animatable(if (preview) 1f else 0f) }
     var shown by remember { mutableStateOf(scene) }
     LaunchedEffect(scene) {
         if (scene != null && shown != null && shown != scene) amount.animateTo(0f, tween(700)) // ganti suasana: pudar dulu
@@ -46,8 +52,8 @@ fun WeatherAmbient(scene: WeatherScene?, dark: Boolean, modifier: Modifier = Mod
         amount.animateTo(if (scene != null) 1f else 0f, tween(if (scene != null) 1400 else 1000))
         if (scene == null) shown = null
     }
-    var time by remember { mutableFloatStateOf(0f) }
-    val running = shown != null
+    var time by remember { mutableFloatStateOf(fixedTime ?: 0f) }
+    val running = shown != null && !preview
     LaunchedEffect(running) {
         if (!running) return@LaunchedEffect
         var last = 0L
@@ -59,15 +65,19 @@ fun WeatherAmbient(scene: WeatherScene?, dark: Boolean, modifier: Modifier = Mod
     val sc = shown ?: return
     val a = amount.value.coerceIn(0f, 1f)
     if (a <= 0.001f) return
+    val snow = remember { SnowCache() }
     Canvas(modifier) {
         val layout = FaceLayout.compute(size.width, size.height)
         when (sc) {
             WeatherScene.RAIN -> drawRain(time, a, dark, layout)
-            WeatherScene.COLD -> drawCold(time, a, dark, layout)
+            WeatherScene.COLD -> drawCold(time, a, dark, layout, snow)
             WeatherScene.HOT -> drawHot(time, a, dark, layout)
         }
     }
 }
+
+/** Waktu tetap (detik) untuk snapshot/preview efek cuaca; null = animasi normal. */
+val LocalWeatherPreviewTime = androidx.compose.runtime.staticCompositionLocalOf<Float?> { null }
 
 /** Hash 0..1 deterministik per partikel. */
 private fun h(i: Int, salt: Int): Float {
@@ -103,24 +113,14 @@ private fun DrawScope.drawRain(t: Float, a: Float, dark: Boolean, l: FaceLayout)
     }
 }
 
-private fun DrawScope.drawCold(t: Float, a: Float, dark: Boolean, l: FaceLayout) {
+private fun DrawScope.drawCold(t: Float, a: Float, dark: Boolean, l: FaceLayout, snow: SnowCache) {
     val w = size.width; val hgt = size.height; val r = l.r
     drawRect(Color(0xFF8EC5FF).copy(alpha = (if (dark) 0.08f else 0.07f) * a))
     // bingkai embun beku di tepi
     drawRect(Brush.radialGradient(
         0.55f to Color.Transparent, 0.85f to Color(0xFFBFE0FF).copy(alpha = 0.22f * a), 1f to Color(0xFFE6F4FF).copy(alpha = 0.45f * a),
         center = Offset(w / 2, hgt / 2), radius = max(w, hgt) * 0.72f))
-    val flake = if (dark) Color.White else Color(0xFF9CC4EE)
-    for (i in 0 until 42) {
-        val speed = 0.05f + 0.07f * h(i, 2)
-        val y = (frac(h(i, 4) + t * speed) * 1.1f - 0.05f) * hgt
-        val sway = sin(t * (0.6f + 0.6f * h(i, 6)) + h(i, 7) * TAU) * r * 0.5f
-        val x = h(i, 1) * w + sway
-        val rad = r * (0.05f + 0.1f * h(i, 3))
-        val alpha = (0.45f + 0.4f * h(i, 5)) * a
-        drawCircle(flake.copy(alpha = alpha * 0.35f), rad * 1.9f, Offset(x, y))
-        drawCircle(flake.copy(alpha = alpha), rad, Offset(x, y))
-    }
+    drawSnow(t, a, dark, l, snow)
     // uap napas "huff" di dekat mulut (tiap ~5 dtk, 1.8 dtk)
     val cyc = 5f
     val ph = frac(t / cyc) * cyc / 1.8f
@@ -184,5 +184,59 @@ private fun DrawScope.drawHot(t: Float, a: Float, dark: Boolean, l: FaceLayout) 
         }
         drawPath(drop, Color(0xFF7CC4FF).copy(alpha = 0.85f * alpha))
         drawCircle(Color.White.copy(alpha = 0.8f * alpha), s * 0.25f, Offset(c.x - s * 0.35f, c.y + s * 0.1f))
+    }
+}
+
+/** Path kepingan salju di-cache per (tier, ukuran, varian) untuk r wajah tertentu: dibangun sekali, tiap frame cuma translate+rotate. */
+private class SnowCache {
+    private var forR = -1f
+    private val paths = arrayOfNulls<Path>(4 * Snowfall.SIZE_STEPS * Snowfall.VARIANTS)
+    val flake = Snowfall.Flake()
+    val strokes = arrayOfNulls<Stroke>(paths.size * 2)
+
+    fun path(f: Snowfall.Flake, r: Float): Int {
+        if (r != forR) { forR = r; paths.fill(null); strokes.fill(null) }
+        val key = (f.tier.ordinal * Snowfall.SIZE_STEPS + f.sizeStep) * Snowfall.VARIANTS + f.variant
+        if (paths[key] == null) {
+            val seg = Snowfall.segments(f.radius, f.variant)
+            paths[key] = Path().apply {
+                var k = 0
+                while (k < seg.size) { moveTo(seg[k], seg[k + 1]); lineTo(seg[k + 2], seg[k + 3]); k += 4 }
+            }
+            val sw = max(1.2f, f.radius * 0.11f)
+            strokes[key * 2] = Stroke(sw, cap = StrokeCap.Round)              // inti putih
+            strokes[key * 2 + 1] = Stroke(sw * 2.3f, cap = StrokeCap.Round)  // garis tepi/bayangan biru
+        }
+        return key
+    }
+    fun pathAt(key: Int) = paths[key]!!
+}
+
+private fun DrawScope.drawSnow(t: Float, a: Float, dark: Boolean, l: FaceLayout, c: SnowCache) {
+    val w = size.width; val hgt = size.height; val r = l.r
+    val topClear = 64.dp.toPx() // bar atas + Dynamic Island
+    val core = Color.White
+    val edge = if (dark) Color(0xFF9CC4EE) else Color(0xFF5E8FC8) // tepi biru tipis: tetap terlihat di tema terang
+    val edgeA = if (dark) 0.32f else 0.6f
+    val dotCore = if (dark) Color(0xFFF2F8FF) else Color(0xFFC9DDF3) // butiran jauh: di tema terang sedikit biru agar terlihat
+    val f = c.flake
+    for (i in 0 until Snowfall.COUNT) {
+        Snowfall.flake(i, t, w, hgt, r, topClear, f)
+        val alpha = f.alpha * a
+        if (alpha <= 0.01f) continue
+        if (f.tier == Snowfall.Tier.DOT) { // butiran jauh yang lembut (kedalaman)
+            val o = Offset(f.x, f.y)
+            drawCircle(dotCore.copy(alpha = alpha * 0.35f), f.radius * 1.7f, o) // pendar lembut, bukan cincin
+            drawCircle(dotCore.copy(alpha = alpha), f.radius, o)
+            continue
+        }
+        val key = c.path(f, r)
+        val path = c.pathAt(key)
+        translate(f.x, f.y) {
+            rotate(f.rotation, pivot = Offset.Zero) {
+                drawPath(path, edge.copy(alpha = alpha * edgeA), style = c.strokes[key * 2 + 1]!!)
+                drawPath(path, core.copy(alpha = alpha), style = c.strokes[key * 2]!!)
+            }
+        }
     }
 }

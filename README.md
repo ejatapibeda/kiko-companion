@@ -30,7 +30,7 @@ Kiko shows a simple face with two glossy eyes and a small mouth. It blinks, glan
   - Local: intents and media keys, with no setup.
   - Official Spotify Web API: OAuth PKCE; playback control needs Premium.
   - A self-hosted **[spotapi-backend](https://github.com/ejatapibeda/spotapi-backend)** (FastAPI + Docker, GPL-3.0). It adds now-playing details, devices and lyrics, and works without Premium. Setup: [docs/spotify.md](docs/spotify.md) and the backend's README.
-- **Weather-reactive face.** Rain, cold and heat change the ambient effects and give funny reactions (sneezing, shivering, overheating). Weather comes from Open-Meteo using coarse location or an IP-based fallback. No key is needed.
+- **Weather-reactive face.** Rain, cold and heat change the ambient effects (rain streaks, drifting six-armed snowflakes, warm haze) and give funny reactions (sneezing, shivering, overheating). Weather comes from Open-Meteo using coarse location or an IP-based fallback. No key is needed.
 - **Dance mode.** When music plays, the face bounces on the beat with music notes, EQ bars, a beat halo and sparkles. You can also say "dance!" (the `face_dance` tool).
 - **Sleep animation.** After a period of inactivity Kiko dozes off with closed eyes and floating "Z"s. A tap, a shake or the wake word wakes it up.
 - **Touch and motion personality.** Taps, long-presses, rapid taps, shaking and tilting each trigger a different reaction, with optional haptics.

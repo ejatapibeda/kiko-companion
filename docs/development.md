@@ -23,7 +23,7 @@
 ## Tests
 
 ```bash
-./gradlew testDebugUnitTest              # JVM unit tests (face logic, dance, mic DSP, parsers, web search, Spotify, activity tracker, cloud pipeline via MockWebServer)
+./gradlew testDebugUnitTest              # JVM unit tests (face logic, dance, snowfall, mic DSP, parsers, web search, Spotify, activity tracker, cloud pipeline via MockWebServer)
 ./gradlew recordPaparazziDebug           # re-render snapshots -> app/src/test/snapshots/images/
 ./gradlew verifyPaparazziDebug           # compare against recorded snapshots
 ./gradlew connectedDebugAndroidTest      # on device/emulator: ONNX wake word, audio decode, encrypted settings
@@ -47,7 +47,7 @@ These exist only in the `debug` and `compact` source sets or behind `BuildConfig
   ```
   This puts the key on your shell command line, so prefer the Settings screen on shared machines.
 - **Settings export/import (`settings_sync.json`).** `am start -n com.coactive.companion/.MainActivity --ez debugExportSettings true` writes all settings, **including API keys**, to the app's private `files/settings_sync.json`. `--ez debugImportSettings true` reads that file and then deletes it. It's meant for copying a configuration between your own test devices with `run-as`. Don't share the file.
-- **`--es debugWeather RAIN|COLD|HOT`** previews the weather reactions.
+- **`--es debugWeather RAIN|COLD|HOT`** previews the weather reactions. Add `--ez noDance true` to keep the ambient effect (e.g. the snow) on screen.
 - **`--es debugAsk "search the web for …"`** sends a text turn through the voice pipeline (thinking → tools → TTS), so you can watch the activity indicators on the home face without speaking.
 
 ## Code layout
