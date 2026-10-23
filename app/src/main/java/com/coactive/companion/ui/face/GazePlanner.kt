@@ -3,7 +3,13 @@ package com.coactive.companion.ui.face
 import kotlin.math.abs
 import kotlin.random.Random
 
-enum class GazeMode { IDLE, LISTENING, THINKING, TALKING, SLEEPING }
+enum class GazeMode {
+    IDLE, LISTENING, THINKING, TALKING, SLEEPING,
+    /** Mencari (web search): menyapu kiri↔kanan cepat, sedikit ke bawah — seperti memindai hasil. */
+    SCANNING,
+    /** Membaca halaman/gambar: maju per "kata" ke kanan lalu loncat balik ke kiri (baris baru). */
+    READING,
+}
 
 /** Satu langkah gerak mata: target (satuan lookX/lookY), lama gerak, lama tahan, dan apakah sambil berkedip. */
 data class GazeStep(val x: Float, val y: Float, val moveMs: Int, val holdMs: Int, val blink: Boolean = false)
@@ -27,6 +33,13 @@ object GazePlanner {
             val side = if (currentX > -0.05f) -1f else 1f
             GazeStep(side * rnd.range(0.12f, 0.32f) + 0.05f, rnd.range(-0.22f, -0.08f), rnd.int(700, 1000), rnd.int(900, 1900))
         }
+        GazeMode.SCANNING -> {
+            val side = if (currentX > 0f) -1f else 1f
+            GazeStep(side * rnd.range(0.42f, 0.58f), rnd.range(0.06f, 0.14f), rnd.int(300, 400), rnd.int(220, 420))
+        }
+        GazeMode.READING ->
+            if (currentX >= 0.38f) GazeStep(-0.45f, rnd.range(0.08f, 0.16f), rnd.int(260, 340), rnd.int(160, 260)) // baris baru
+            else GazeStep((currentX + rnd.range(0.14f, 0.22f)).coerceAtMost(0.5f), rnd.range(0.06f, 0.14f), rnd.int(150, 220), rnd.int(220, 380))
         GazeMode.IDLE -> {
             val away = abs(currentX) > 0.2f || abs(currentY) > 0.15f
             if (away || rnd.nextFloat() < 0.4f) {

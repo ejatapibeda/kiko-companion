@@ -37,6 +37,8 @@ data class StoredChatMessage(
     val error: Boolean = false,
     /** Sumber web (hasil web_search) — ditampilkan sebagai link di bawah jawaban. */
     val sources: List<com.coactive.companion.search.WebSource> = emptyList(),
+    /** Langkah tool yang dijalankan untuk jawaban ini (mis. pencarian web, Spotify) — ditampilkan sebagai chip. */
+    val steps: List<com.coactive.companion.assistant.ActivityStep> = emptyList(),
 )
 
 /**

@@ -162,11 +162,12 @@ class MainActivity : ComponentActivity() {
                     val sending by vm.chat.sending.collectAsStateWithLifecycle()
                     val pending by vm.chat.pending.collectAsStateWithLifecycle()
                     val notice by vm.chat.notice.collectAsStateWithLifecycle()
+                    val chatActivity by vm.chat.activity.collectAsStateWithLifecycle()
                     com.coactive.companion.ui.ChatScreen(
                         messages = msgs, sending = sending, pending = pending, assistantName = settings.assistantName, dark = dark,
                         onSend = vm.chat::send, onPickImage = { vm.chat.attachImage(it) }, onPickText = { vm.chat.attachText(it) },
                         onRemovePending = vm.chat::removePending, onClear = { vm.chat.clearHistory() }, onBack = { showChat = false },
-                        notice = notice, onNoticeShown = vm.chat::clearNotice,
+                        notice = notice, onNoticeShown = vm.chat::clearNotice, activity = chatActivity,
                     )
                 } else if (showPlayer) {
                     BackHandler { showPlayer = false }
@@ -212,6 +213,11 @@ class MainActivity : ComponentActivity() {
                 window.decorView.postDelayed({ vm.debugWeather(mood, hold, noDance) }, 600)
             }
             intent.removeExtra("debugWeather")
+        }
+        // debug (adb): kirim teks lewat jalur suara (indikator aktivitas di wajah), mis. --es debugAsk "cuaca di Bandung"
+        if (BuildConfig.DEBUG) intent?.getStringExtra("debugAsk")?.takeIf { it.isNotBlank() }?.let { q ->
+            intent.removeExtra("debugAsk")
+            window.decorView.postDelayed({ vm.sendText(q) }, 600)
         }
         // debug (adb) sinkron pengaturan antar perangkat — file di filesDir privat, tidak pernah dicetak ke log:
         //   am start -n com.coactive.companion/.MainActivity --ez debugExportSettings true  → files/settings_sync.json

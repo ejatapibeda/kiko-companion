@@ -18,6 +18,18 @@ object FaceLogic {
         Phase.IDLE -> emotion
     }
 
+    /** Ekspresi selama berpikir/memakai tool: tiap aktivitas punya wajah sendiri (lihat ActivityFx untuk ikonnya). */
+    fun expressionFor(phase: Phase, emotion: Expression, activity: AgentActivity?): Expression {
+        if (phase != Phase.THINKING || activity == null) return expressionFor(phase, emotion)
+        if (activity.failed) return Expression.SAD
+        return when (activity.kind) {
+            ActivityKind.WEB_SEARCH, ActivityKind.BROWSING, ActivityKind.VISION, ActivityKind.WEATHER,
+            ActivityKind.TRANSCRIBING, ActivityKind.OPEN_APP -> Expression.CURIOUS
+            ActivityKind.DANCE -> Expression.EXCITED
+            else -> if (activity.kind.isSpotify) Expression.HAPPY else Expression.THINKING
+        }
+    }
+
     /** Apakah sudah waktunya tidur (ngantuk) setelah tidak ada interaksi. */
     fun shouldSleep(phase: Phase, lastInteractionMs: Long, nowMs: Long, sleepAfterSeconds: Int): Boolean =
         phase == Phase.IDLE && sleepAfterSeconds > 0 && nowMs - lastInteractionMs >= sleepAfterSeconds * 1000L

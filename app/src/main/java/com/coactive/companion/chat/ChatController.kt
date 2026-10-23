@@ -11,6 +11,7 @@ import android.util.Base64
 import android.util.Log
 import com.coactive.companion.R
 import com.coactive.companion.assistant.AssistantBrain
+import com.coactive.companion.assistant.asBrainListener
 import com.coactive.companion.assistant.ConversationMemory
 import com.coactive.companion.llm.OpenAiChatLlm
 import com.coactive.companion.net.ApiException
@@ -56,6 +57,9 @@ class ChatController(
     /** Pesan singkat (mis. gagal membaca file) untuk snackbar. */
     val notice: StateFlow<String?> = _notice.asStateFlow()
     private var job: Job? = null
+    private val tracker = com.coactive.companion.assistant.ActivityTracker()
+    /** Aktivitas yang sedang berjalan (berpikir, mencari web, Spotify, …) untuk baris status di gelembung. */
+    val activity: StateFlow<com.coactive.companion.assistant.AgentActivity?> = tracker.current
     private val pendingDir = File(context.cacheDir, "chat_pending").apply { mkdirs() }
 
     init { scope.launch { store.load() } }
@@ -105,6 +109,8 @@ class ChatController(
         _pending.value = null
         job = scope.launch {
             _sending.value = true
+            tracker.beginTurn()
+            tracker.llmRequest(0, att?.kind == AttachmentKind.IMAGE)
             try {
                 // lampiran dipindah dari cache ke penyimpanan permanen riwayat
                 val stored = att?.let {
@@ -116,16 +122,18 @@ class ChatController(
                 store.add(StoredChatMessage(store.nextId(), "user", text, stored))
                 val reply = ask(text, stored, history)
                 _sending.value = false
-                store.add(StoredChatMessage(store.nextId(), "assistant", reply.text.ifBlank { "…" }, sources = reply.sources))
+                tracker.clear()
+                store.add(StoredChatMessage(store.nextId(), "assistant", reply.text.ifBlank { "…" }, sources = reply.sources, steps = tracker.steps))
             } catch (e: CancellationException) { throw e
             } catch (e: Throwable) {
                 Log.w(TAG, "chat failed", e)
-                store.add(StoredChatMessage(store.nextId(), "assistant", errorText(e, att?.kind == AttachmentKind.IMAGE), error = true))
-            } finally { _sending.value = false }
+                tracker.clear()
+                store.add(StoredChatMessage(store.nextId(), "assistant", errorText(e, att?.kind == AttachmentKind.IMAGE), error = true, steps = tracker.steps))
+            } finally { _sending.value = false; tracker.clear() }
         }
     }
 
-    fun cancel() { job?.cancel(); _sending.value = false }
+    fun cancel() { job?.cancel(); _sending.value = false; tracker.clear() }
 
     fun clearHistory() = scope.launch { cancel(); removePending(); store.clear() }
 
@@ -161,6 +169,7 @@ class ChatController(
             OpenAiChatLlm(a.llmBaseUrl, a.llmApiKey, model), tools(), memory,
             { AssistantBrain.defaultSystemPrompt(a.assistantName, a.language, a.defaultCity, Locale.forLanguageTag(a.language), chat = true) },
             onToolCall = { Log.i(TAG, "chat tool call: $it") },
+            listener = tracker.asBrainListener(),
         )
         return brain.respond(prompt.toString(), images, memoryText)
     }

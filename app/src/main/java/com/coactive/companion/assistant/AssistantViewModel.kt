@@ -83,8 +83,10 @@ data class UiState(
     val spotifyPrompt: SpotifyPrompt? = null,
     /** Reaksi cuaca sesekali (bersin/kedinginan/kepanasan). */
     val weatherEvent: com.coactive.companion.ui.face.WeatherEvent? = null,
+    /** Apa yang sedang dikerjakan (mendengar, berpikir, mencari web, Spotify, …) → indikator wajah + pil. */
+    val activity: AgentActivity? = null,
 ) {
-    val expression get() = FaceLogic.expressionFor(phase, emotion)
+    val expression get() = FaceLogic.expressionFor(phase, emotion, activity)
 }
 
 enum class SpotifyPrompt { OPEN_SPOTIFY, RETRY }
@@ -105,6 +107,8 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
     private val s get() = settings.value
 
     private val _ui = MutableStateFlow(UiState(needsSetup = s.llmApiKey.isBlank()))
+    /** Status aktivitas (siklus hidup nyata STT/LLM/tool/TTS) → [UiState.activity]. */
+    private val activity = ActivityTracker { a -> _ui.update { it.copy(activity = a) } }
     val ui: StateFlow<UiState> = _ui.asStateFlow()
 
     private val memory = ConversationMemory()
@@ -461,6 +465,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
     // ---------- pipeline ----------
 
     private suspend fun runTurn(userText: String) {
+        val turnId = activity.beginTurn()
         _ui.update { it.copy(phase = Phase.THINKING, userText = userText, caption = userText, error = null, spotifyPrompt = null) }
         pendingSpotifyRetry = null
         try {
@@ -468,19 +473,29 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 OpenAiChatLlm(s.llmBaseUrl, s.llmApiKey, s.llmModel), DefaultTools.create(getApplication(), { s }, ::spotify, ::setDance), memory,
                 { AssistantBrain.defaultSystemPrompt(s.assistantName, s.language, s.defaultCity, Locale.forLanguageTag(s.language)) },
                 onToolCall = { name -> Log.i(TAG, "tool call: $name") },
+                listener = activity.asBrainListener(),
             )
             val reply = brain.respond(userText)
             Log.i(TAG, "reply emotion=${reply.emotion} chars=${reply.text.length} sources=${reply.sources.size}")
             val spoken = com.coactive.companion.search.SourceExtractor.stripUrlsForSpeech(reply.text).ifBlank { reply.text }
             _ui.update { it.copy(phase = Phase.TALKING, emotion = reply.emotion, caption = spoken) }
-            buildTts().speak(spoken) { lvl -> _ui.update { it.copy(talkLevel = lvl) } }
+            // "siap-siap ngomong" sampai suara pertama keluar (sintesis TTS bisa makan waktu)
+            activity.speakingPrep()
+            var voiced = false
+            buildTts().speak(spoken) { lvl ->
+                if (!voiced) { voiced = true; activity.clear(turnId) }
+                _ui.update { it.copy(talkLevel = lvl) }
+            }
+            activity.clear(turnId)
             _ui.update { it.copy(phase = Phase.IDLE, talkLevel = 0f) }
             relaxEmotionLater()
         } catch (e: CancellationException) {
+            activity.clear(turnId)
             _ui.update { it.copy(phase = Phase.IDLE, talkLevel = 0f) }
             throw e
         } catch (e: Throwable) {
             Log.w(TAG, "turn failed", e)
+            activity.clear(turnId)
             _ui.update { it.copy(phase = Phase.IDLE, emotion = Expression.SAD, talkLevel = 0f, caption = friendlyError(e), error = e.message) }
             relaxEmotionLater(6000)
         } finally {
@@ -509,6 +524,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
         listenStartedAt = System.currentTimeMillis()
         if (s.earconEnabled) Earcon.play(viewModelScope, Earcon.START)
         _ui.update { it.copy(phase = Phase.LISTENING, caption = str(R.string.vm_listening), emotion = Expression.NEUTRAL, error = null) }
+        activity.beginTurn(); activity.listening()
         ensureMic()
     }
 
@@ -528,10 +544,12 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(micLevel = 0f) }
         if (s.earconEnabled) Earcon.play(viewModelScope, Earcon.END, gain = 0.35f)
         if (!speech || frames.isEmpty()) {
+            activity.clear()
             _ui.update { it.copy(phase = Phase.IDLE, caption = str(R.string.vm_heard_nothing), emotion = Expression.CURIOUS) }
             relaxEmotionLater(); refreshMic(); return
         }
         _ui.update { it.copy(phase = Phase.THINKING, caption = "…") }
+        activity.transcribing()
         refreshMic()
         turnJob = viewModelScope.launch {
             try {
@@ -539,11 +557,13 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 val text = OpenAiSpeechToText(s.effectiveSttBaseUrl, s.effectiveSttApiKey, s.sttModel)
                     .transcribe(Wav.fromPcm16(pcm), s.languageCode)
                 if (text.isBlank()) {
+                    activity.clear()
                     _ui.update { it.copy(phase = Phase.IDLE, caption = str(R.string.vm_unclear), emotion = Expression.CURIOUS) }
                     relaxEmotionLater()
                 } else runTurn(text)
             } catch (e: CancellationException) { throw e } catch (e: Throwable) {
                 Log.w(TAG, "stt failed", e)
+                activity.clear()
                 _ui.update { it.copy(phase = Phase.IDLE, emotion = Expression.SAD, caption = friendlyError(e)) }
                 relaxEmotionLater(6000)
             }
@@ -553,6 +573,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
     private fun cancelTurn() {
         turnJob?.cancel(); turnJob = null
         androidTts.stop()
+        activity.clear()
         if (_ui.value.phase == Phase.TALKING || _ui.value.phase == Phase.THINKING) _ui.update { it.copy(phase = Phase.IDLE, talkLevel = 0f) }
     }
 

@@ -145,8 +145,11 @@ fun MainScreen(
 
     Box(Modifier.fillMaxSize().drawBehind { drawPearlBackground(dark) }) {
         com.coactive.companion.ui.face.WeatherAmbient(weatherScene, dark, Modifier.fillMaxSize())
+        // aktivitas (berpikir/tool/STT/TTS) — ditahan sebentar agar tool super cepat tetap terbaca
+        val shownActivity = rememberHeldActivity(state.activity)
+        val thinkingActivity = shownActivity?.takeIf { state.phase == Phase.THINKING }
         AnimatedFace(
-            expression = state.expression,
+            expression = com.coactive.companion.assistant.FaceLogic.expressionFor(state.phase, state.emotion, thinkingActivity),
             colors = if (dark) FaceColors.Dark else FaceColors.Light,
             modifier = Modifier.fillMaxSize().testTag("face")
                 .pointerInput(Unit) {
@@ -166,7 +169,9 @@ fun MainScreen(
             darkGlow = dark,
             dancing = dancing,
             weatherEvent = state.weatherEvent,
+            gazeOverride = ActivityVisuals.gaze(thinkingActivity),
         )
+        if (state.phase != Phase.SLEEPING) ActivityFx(shownActivity, dark, Modifier.fillMaxSize())
 
         // bar atas: tombol pengaturan (kiri) & chat (kanan); island di tengah
         Row(Modifier.fillMaxWidth().safeDrawingPadding().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -189,6 +194,9 @@ fun MainScreen(
                 state.needsSetup -> stringResource(R.string.greeting_setup)
                 else -> stringResource(R.string.greeting)
             }
+            // pil status di atas caption (bukan di atas: Dynamic Island menempati tengah atas)
+            ActivityPill(shownActivity?.takeIf { it.kind != com.coactive.companion.assistant.ActivityKind.LISTENING && state.phase != Phase.SLEEPING },
+                dark, Modifier.padding(bottom = if (landscape) 6.dp else 10.dp))
             state.spotifyPrompt?.let { prompt ->
                 Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
                     when (prompt) {

@@ -53,6 +53,9 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -116,6 +119,8 @@ fun ChatScreen(
     onBack: () -> Unit,
     notice: String? = null,
     onNoticeShown: () -> Unit = {},
+    /** Aktivitas berjalan (berpikir, mencari web, Spotify, …) → baris status di gelembung "mengetik". */
+    activity: com.coactive.companion.assistant.AgentActivity? = null,
 ) {
     val ctx = LocalContext.current
     val fg = if (dark) Color(0xFFE3E8FF) else Palette.TitleText
@@ -163,7 +168,7 @@ fun ChatScreen(
                             Toast.makeText(ctx, ctx.getString(R.string.chat_copied), Toast.LENGTH_SHORT).show()
                         }
                     }
-                    if (sending) item(key = "typing") { TypingBubble(assistantName, dark, muted) }
+                    if (sending) item(key = "typing") { TypingBubble(assistantName, dark, muted, rememberHeldActivity(activity)) }
                 }
             }
 
@@ -200,6 +205,7 @@ private fun Bubble(m: StoredChatMessage, dark: Boolean, fg: Color, muted: Color,
                 if (m.attachment != null) Spacer(Modifier.size(8.dp))
                 Text(if (user) androidx.compose.ui.text.AnnotatedString(m.text) else simpleMarkdown(m.text), color = if (user) Color.White else fg, fontSize = 15.sp, lineHeight = 21.sp)
             }
+            if (!user && m.steps.isNotEmpty()) StepChips(m.steps, dark, muted)
             if (!user && m.sources.isNotEmpty()) SourceLinks(m.sources, dark, muted)
         }
     }
@@ -265,11 +271,30 @@ private fun FileChip(name: String, sub: String, onBlue: Boolean, dark: Boolean, 
 }
 
 @Composable
-private fun TypingBubble(name: String, dark: Boolean, muted: Color) {
+private fun TypingBubble(name: String, dark: Boolean, muted: Color, activity: com.coactive.companion.assistant.AgentActivity? = null) {
     val tr = rememberInfiniteTransition(label = "typing")
     val t by tr.animateFloat(0f, 1f, infiniteRepeatable(tween(1100, easing = LinearEasing), RepeatMode.Restart), label = "t")
+    val reduced = rememberReducedMotion()
     Row(verticalAlignment = Alignment.CenterVertically) {
         val shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 6.dp, bottomEnd = 20.dp)
+        if (activity != null) {
+            // baris status langsung: ikon + "Mencari: …" / "Memutar di Spotify…" + titik berdenyut
+            val tint = ActivityVisuals.tint(activity.kind, dark, activity.failed)
+            Row(Modifier.widthIn(max = 320.dp).frost(dark, shape).padding(horizontal = 14.dp, vertical = 11.dp).testTag("typing"),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val pulse = if (reduced) 1f else 1f + 0.1f * kotlin.math.sin(t * 2 * Math.PI).toFloat()
+                Box(Modifier.size(26.dp).graphicsLayer { scaleX = pulse; scaleY = pulse }.clip(CircleShape)
+                    .background(tint.copy(alpha = if (dark) 0.22f else 0.15f)), contentAlignment = Alignment.Center) {
+                    Icon(ActivityVisuals.icon(activity.kind, activity.failed), null, tint = tint, modifier = Modifier.size(16.dp))
+                }
+                Text(activityLabel(activity), color = if (dark) Color(0xFFE3E8FF) else Palette.TitleText, fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false).semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite }
+                        .testTag("chatActivity"))
+                if (!activity.failed) ActivityDots(tint, reduced)
+            }
+            return@Row
+        }
         Row(Modifier.frost(dark, shape).padding(horizontal = 16.dp, vertical = 14.dp).testTag("typing"),
             horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             repeat(3) { i ->
@@ -280,6 +305,25 @@ private fun TypingBubble(name: String, dark: Boolean, muted: Color) {
             }
         }
         Text(stringResource(R.string.chat_typing, name), color = muted, fontSize = 12.sp, modifier = Modifier.padding(start = 10.dp))
+    }
+}
+
+/** Chip langkah tool yang dijalankan untuk jawaban ini (di atas daftar sumber). */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun StepChips(steps: List<com.coactive.companion.assistant.ActivityStep>, dark: Boolean, muted: Color) {
+    androidx.compose.foundation.layout.FlowRow(Modifier.padding(top = 8.dp).testTag("chatSteps"),
+        horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        steps.take(6).forEach { st ->
+            val tint = ActivityVisuals.tint(st.activityKind, dark, st.failed)
+            Row(Modifier.clip(RoundedCornerShape(12.dp)).background(tint.copy(alpha = if (dark) 0.18f else 0.11f))
+                .padding(horizontal = 8.dp, vertical = 3.dp).testTag("chatStep"),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Icon(ActivityVisuals.icon(st.activityKind, st.failed), null, tint = tint, modifier = Modifier.size(13.dp))
+                Text(stepLabel(st), color = muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 220.dp))
+            }
+        }
     }
 }
 

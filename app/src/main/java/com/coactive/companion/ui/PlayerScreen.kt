@@ -270,8 +270,7 @@ private fun LyricsPanel(state: LyricsState, positionMs: Long, dark: Boolean, tex
         val hint = if (dark) Palette.DarkText else Palette.LightText
         when (state) {
             LyricsState.Loading -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                CircularProgressIndicator(Modifier.size(28.dp), color = Palette.Accent, strokeWidth = 3.dp)
-                Text(stringResource(R.string.player_lyrics_loading), color = hint, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
+                ActivityPill(com.coactive.companion.assistant.AgentActivity(com.coactive.companion.assistant.ActivityKind.LYRICS), dark)
             }
             LyricsState.Unavailable -> Text(stringResource(R.string.player_lyrics_unavailable), color = hint, fontSize = 16.sp, fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.Center, modifier = Modifier.testTag("lyricsUnavailable"))

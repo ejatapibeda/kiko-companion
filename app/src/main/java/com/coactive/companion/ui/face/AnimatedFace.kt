@@ -55,11 +55,14 @@ fun AnimatedFace(
     danceBpm: Float = DanceMotion.DEFAULT_BPM,
     /** Reaksi cuaca sesekali (bersin/menggigil/kepanasan); hanya diputar saat idle, lihat [WeatherAnim]. */
     weatherEvent: WeatherEvent? = null,
+    /** Pola lirikan khusus saat memakai tool (mis. [GazeMode.SCANNING] saat mencari web). */
+    gazeOverride: GazeMode? = null,
 ) {
     val sleepy = expression == Expression.SLEEPY
     val mode = when {
         sleepy -> GazeMode.SLEEPING
         listening -> GazeMode.LISTENING
+        gazeOverride != null -> gazeOverride
         expression == Expression.THINKING -> GazeMode.THINKING
         talking -> GazeMode.TALKING
         else -> GazeMode.IDLE

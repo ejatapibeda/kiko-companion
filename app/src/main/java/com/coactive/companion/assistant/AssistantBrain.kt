@@ -18,6 +18,8 @@ class AssistantBrain(
     private val systemPrompt: () -> String,
     private val maxToolRounds: Int = 5,
     private val onToolCall: (String) -> Unit = {},
+    /** Siklus hidup (mulai LLM / mulai & selesai tool) untuk indikator aktivitas. */
+    private val listener: BrainListener? = null,
 ) {
     /**
      * @param images data URL gambar untuk pesan ini (format vision), hanya dikirim sekali (tidak masuk memori).
@@ -29,7 +31,8 @@ class AssistantBrain(
         convo += ChatMessage("user", userText, images = images)
         val specs = tools.specs()
         val sources = mutableListOf<com.coactive.companion.search.WebSource>()
-        repeat(maxToolRounds) {
+        repeat(maxToolRounds) { round ->
+            listener?.onLlmRequest(round, images.isNotEmpty())
             val msg = llm.complete(convo, specs)
             val calls = msg.toolCalls.orEmpty()
             if (calls.isEmpty()) {
@@ -40,12 +43,15 @@ class AssistantBrain(
             convo += ChatMessage(role = "assistant", content = msg.content, toolCalls = calls)
             for (c in calls) {
                 onToolCall(c.function.name)
+                listener?.onToolStart(c.function.name, c.function.arguments)
                 val out = tools.execute(c.function.name, c.function.arguments)
+                listener?.onToolEnd(c.function.name, out)
                 sources += com.coactive.companion.search.SourceExtractor.fromToolOutput(c.function.name, out)
                 convo += ChatMessage.tool(c.id, c.function.name, out)
             }
         }
         // terlalu banyak putaran tool: minta jawaban akhir tanpa tool
+        listener?.onLlmRequest(maxToolRounds, false)
         val final = llm.complete(convo, emptyList())
         val reply = EmotionParser.parse(final.content.orEmpty())
         memory.add(memoryText, reply.text)
