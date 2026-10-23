@@ -27,11 +27,11 @@ This mode talks to a small **single-user HTTP backend** that wraps [SpotAPI](htt
 
 > SpotAPI is unofficial and intended for educational use. Spotify can change its private API at any time, and using it may violate Spotify's Terms of Service. Use it at your own risk with your own account. SpotAPI is GPL-3.0. The backend runs as a separate service, and this app only calls it over HTTP.
 
-The backend source is **not part of this repository**. Below is the contract the app expects (`app/src/main/java/com/coactive/companion/spotify/SpotapiBackend.kt`) and a reference deployment.
+The backend is open source: **[ejatapibeda/spotapi-backend](https://github.com/ejatapibeda/spotapi-backend)** (FastAPI + Docker, GPL-3.0, amd64/arm64). Its README has the full setup: `.env` variables, Docker Compose quick start, HTTPS via Tailscale Serve/Funnel/reverse proxy, API reference with examples, and troubleshooting. Below is a summary of the contract the app expects (`app/src/main/java/com/coactive/companion/spotify/SpotapiBackend.kt`).
 
 ### Reference architecture
 
-- **Server:** **FastAPI** in **Docker**. Use a glibc image such as `python:3.12-slim`, not Alpine, because SpotAPI's `tls_client` loads a Go shared library. It runs on amd64 and arm64 (Raspberry Pi, Armbian boards, …).
+- **Server:** [spotapi-backend](https://github.com/ejatapibeda/spotapi-backend) — **FastAPI** in **Docker**. Use a glibc image such as `python:3.12-slim`, not Alpine, because SpotAPI's `tls_client` loads a Go shared library. It runs on amd64 and arm64 (Raspberry Pi, Armbian boards, …).
 - **Process:** one container with one worker, because the player state is kept in memory.
 - **Storage:** SQLite under `/data`. The Spotify cookies are stored encrypted with a Fernet key (`ENC_KEY`).
 - **Auth:** every endpoint except `/health` and `/auth/pair` requires `Authorization: Bearer <APP_TOKEN>`.
@@ -64,6 +64,8 @@ curl -s http://127.0.0.1:8080/api/v1/health      # {"ok":true,...}
 | GET | `/now-playing` | Track, artists, album, art URL, position/duration, `is_playing`, device name |
 | GET | `/devices` | Spotify Connect devices |
 | GET | `/lyrics?uri=spotify:track:…` | `{synced, source: "spotify" or "lrclib", lines: [{start_ms, text}]}`. Returns 404 if there are no lyrics. |
+
+There is no separate search endpoint: `POST /play` with `{"query": "..."}` searches on the server and plays the top hit (or `index` N). The full OpenAPI contract is [`openapi.yaml`](https://github.com/ejatapibeda/spotapi-backend/blob/main/openapi.yaml).
 
 Errors use one envelope: `{"ok": false, "error": {"code", "message", "retryable"}}`. Common codes:
 
