@@ -6,6 +6,14 @@ APKs for each version are attached to the [GitHub Releases](https://github.com/e
 
 ## [Unreleased]
 
+### Added
+
+- Settings → **Back up & restore**: export every setting (API keys, voice, search, Spotify, app language, Spotify
+  Web API tokens) to a versioned JSON file and import it on another phone through the system file picker. Import
+  asks for confirmation, then applies and saves everything and restarts the affected services.
+- Debug builds: adb hooks to export/import that file at a fixed path in the app's external files dir, plus a
+  summary that lists secrets only as hashes (see `docs/development.md`).
+
 ## [1.0.0] - 2026-10-24
 
 First public release.

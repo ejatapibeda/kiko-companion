@@ -43,6 +43,13 @@ object AppLocale {
         return true
     }
 
+    /** Tag bahasa UI yang tersimpan (ikut cadangan pengaturan). */
+    fun storedTag(context: Context): String? = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null)
+
+    fun setStoredTag(context: Context, tag: String) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, tag).commit()
+    }
+
     /** Untuk attachBaseContext (API < 33). */
     fun wrap(base: Context): Context {
         if (Build.VERSION.SDK_INT >= 33) return base

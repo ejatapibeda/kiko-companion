@@ -45,38 +45,23 @@ class SettingsRepository(context: Context) : com.coactive.companion.spotify.Spot
     fun reload() { _settings.value = load() }
 
     /**
-     * DEBUG-only: ekspor semua pengaturan (termasuk API key) sebagai JSON bertipe, untuk sinkron antar perangkat.
+     * Ekspor semua pengaturan (termasuk API key & token Spotify) sebagai JSON berversi — lihat [SettingsBackup].
      * File prefs terenkripsi tidak bisa disalin mentah — kuncinya terikat Keystore tiap perangkat.
-     * Token OAuth Spotify sengaja TIDAK ikut (refresh token berotasi → satu perangkat bisa logout).
      */
-    fun exportJson(): String {
-        val o = org.json.JSONObject()
-        for ((k, v) in prefs.all) {
-            if (k in SYNC_EXCLUDED || v == null) continue
-            val t = when (v) { is String -> "s"; is Boolean -> "b"; is Int -> "i"; is Long -> "l"; is Float -> "f"; else -> continue }
-            o.put(k, org.json.JSONObject().put("t", t).put("v", if (v is Float) v.toDouble() else v))
-        }
-        return org.json.JSONObject().put("v", 1).put("prefs", o).toString()
-    }
+    fun exportBackup(localeTag: String?, appVersion: String): String = SettingsBackup.encode(
+        SettingsBackup.Backup(_settings.value, localeTag, SettingsBackup.SpotifyTokens(spotifyAccessToken, spotifyRefreshToken, spotifyExpiresAt), appVersion),
+    )
 
-    /** DEBUG-only: kebalikan dari [exportJson]. Mengembalikan jumlah kunci yang diimpor. */
-    fun importJson(json: String): Int {
-        val o = org.json.JSONObject(json).getJSONObject("prefs")
+    /** Kebalikan dari [exportBackup]: terapkan & simpan. Melempar [IllegalArgumentException] bila file tidak valid. */
+    fun importBackup(text: String): SettingsBackup.Backup {
+        val b = SettingsBackup.decode(text)
+        update { b.settings }
         val e = prefs.edit()
-        var n = 0
-        for (k in o.keys()) {
-            if (k in SYNC_EXCLUDED) continue
-            val item = o.getJSONObject(k)
-            when (item.getString("t")) {
-                "s" -> e.putString(k, item.getString("v")); "b" -> e.putBoolean(k, item.getBoolean("v"))
-                "i" -> e.putInt(k, item.getInt("v")); "l" -> e.putLong(k, item.getLong("v"))
-                "f" -> e.putFloat(k, item.getDouble("v").toFloat()); else -> continue
-            }
-            n++
+        b.spotify?.takeUnless { it.isEmpty }?.let { t ->
+            e.putString("spotify_access", t.access).putString("spotify_refresh", t.refresh).putLong("spotify_exp", t.expiresAt)
         }
-        e.commit()
-        reload()
-        return n
+        e.commit() // tunggu semua tulisan (termasuk apply() dari update) sampai ke disk
+        return b
     }
 
     private fun load(): AppSettings {
@@ -151,7 +136,6 @@ class SettingsRepository(context: Context) : com.coactive.companion.spotify.Spot
     }
 
     private companion object {
-        val SYNC_EXCLUDED = setOf("spotify_access", "spotify_refresh", "spotify_exp", "spotify_state", "spotify_verifier")
         fun createPrefs(context: Context): SharedPreferences {
             val key = MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
             return EncryptedSharedPreferences.create(

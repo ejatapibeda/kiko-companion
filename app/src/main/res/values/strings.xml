@@ -264,4 +264,14 @@
     <string name="settings_about_version">Version %1$s (%2$d)</string>
     <string name="settings_about_debug">debug build</string>
     <string name="settings_about_releases">Source code &amp; releases (download APK)</string>
+    <string name="backup_title">Back up &amp; restore</string>
+    <string name="backup_desc">Export every setting (API keys, tokens, voice, search, Spotify) to a JSON file to move Kiko to another phone. The file contains your keys in plain text — keep it private and delete it after importing.</string>
+    <string name="backup_export">Export</string>
+    <string name="backup_import">Import</string>
+    <string name="backup_import_confirm_title">Import settings?</string>
+    <string name="backup_import_confirm_body">All current settings on this device will be replaced by the ones in the file. Unsaved changes on this screen are discarded.</string>
+    <string name="backup_export_ok">Settings exported</string>
+    <string name="backup_export_failed">Export failed</string>
+    <string name="backup_import_ok">Settings imported (%1$d fields)</string>
+    <string name="backup_import_failed">Not a valid Kiko settings file</string>
 </resources>

@@ -155,6 +155,8 @@ class MainActivity : ComponentActivity() {
                             Toast.makeText(this, getString(R.string.vm_conversation_cleared), Toast.LENGTH_SHORT).show()
                         },
                         onSpotapiCheck = { draft -> vm.refreshSpotapiSession(draft) },
+                        onExportSettings = { runCatching { exportPicker.launch(com.coactive.companion.settings.SettingsBackup.FILE_NAME) } },
+                        onImportSettings = { runCatching { importPicker.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) } },
                     )
                 } else if (showChat) {
                     BackHandler { showChat = false }
@@ -219,27 +221,77 @@ class MainActivity : ComponentActivity() {
             intent.removeExtra("debugAsk")
             window.decorView.postDelayed({ vm.sendText(q) }, 600)
         }
-        // debug (adb) sinkron pengaturan antar perangkat — file di filesDir privat, tidak pernah dicetak ke log:
-        //   am start -n com.coactive.companion/.MainActivity --ez debugExportSettings true  → files/settings_sync.json
-        //   am start -n com.coactive.companion/.MainActivity --ez debugImportSettings true  → baca lalu HAPUS file itu
+        // debug (adb) pindah pengaturan antar perangkat — file di direktori eksternal app, isinya tidak pernah dicetak ke log:
+        //   am start -n com.coactive.companion/.MainActivity --ez debugExportSettings true   → files/kiko-settings.json (+ kiko-settings-summary.json)
+        //   am start -n com.coactive.companion/.MainActivity --ez debugImportSettings true   → baca, terapkan, lalu HAPUS file itu
+        //   am start -n com.coactive.companion/.MainActivity --ez debugSettingsSummary true  → hanya kiko-settings-summary.json
+        // Ringkasan: nilai non-rahasia + sha256 untuk API key/token (untuk membandingkan dua perangkat).
         if (BuildConfig.DEBUG && intent != null) {
-            val f = java.io.File(filesDir, "settings_sync.json")
+            val dir = getExternalFilesDir(null) ?: filesDir
+            val f = java.io.File(dir, com.coactive.companion.settings.SettingsBackup.FILE_NAME)
+            val summaryFile = java.io.File(dir, "kiko-settings-summary.json")
+            fun writeSummary() = runCatching {
+                val b = com.coactive.companion.settings.SettingsBackup.decode(exportSettingsJson())
+                summaryFile.writeText(com.coactive.companion.settings.SettingsBackup.summaryJson(b))
+            }
             if (intent.getBooleanExtra("debugExportSettings", false)) {
                 intent.removeExtra("debugExportSettings")
-                runCatching { f.writeText(vm.repo.exportJson()); f.setReadable(false, false); f.setReadable(true, true) }
+                runCatching { f.writeText(exportSettingsJson()) }
                     .onSuccess { android.util.Log.i("SettingsSync", "export ok") }.onFailure { android.util.Log.w("SettingsSync", "export failed: ${it.javaClass.simpleName}") }
+                writeSummary()
+            }
+            if (intent.getBooleanExtra("debugSettingsSummary", false)) {
+                intent.removeExtra("debugSettingsSummary")
+                writeSummary().onSuccess { android.util.Log.i("SettingsSync", "summary ok") }
             }
             if (intent.getBooleanExtra("debugImportSettings", false)) {
                 intent.removeExtra("debugImportSettings")
-                runCatching { vm.repo.importJson(f.readText()) }
-                    .onSuccess { n -> android.util.Log.i("SettingsSync", "import ok: $n keys") }.onFailure { android.util.Log.w("SettingsSync", "import failed: ${it.javaClass.simpleName}") }
-                f.delete()
-                window.decorView.post { recreate() }
-                return
+                val legacy = java.io.File(filesDir, "settings_sync.json")
+                val src = if (f.exists()) f else legacy
+                val ok = runCatching { importSettingsJson(src.readText()) }
+                    .onSuccess { b -> android.util.Log.i("SettingsSync", "import ok: ${b.fieldCount} fields") }
+                    .onFailure { android.util.Log.w("SettingsSync", "import failed: ${it.javaClass.simpleName}") }.isSuccess
+                f.delete(); legacy.delete()
+                if (ok) writeSummary()
+                if (ok) { window.decorView.post { recreate() }; return }
             }
         }
         val data = intent?.data ?: return
         if (data.scheme == com.coactive.companion.spotify.SpotifyAuth.REDIRECT_SCHEME && data.host == com.coactive.companion.spotify.SpotifyAuth.REDIRECT_HOST) vm.handleSpotifyRedirect(data)
+    }
+
+    private val exportPicker = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        uri?.let(::exportSettingsTo)
+    }
+    private val importPicker = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let(::importSettingsFrom)
+    }
+
+    /** Cadangan pengaturan saat ini (JSON berversi, BERISI API key — jangan di-log). */
+    private fun exportSettingsJson(): String =
+        vm.repo.exportBackup(com.coactive.companion.settings.AppLocale.storedTag(this), BuildConfig.VERSION_NAME)
+
+    /** Terapkan cadangan: simpan, segarkan layanan (wake word, TTS, Spotify, cuaca), lalu bahasa UI. */
+    private fun importSettingsJson(text: String): com.coactive.companion.settings.SettingsBackup.Backup {
+        val b = vm.repo.importBackup(text)
+        b.localeTag?.let { com.coactive.companion.settings.AppLocale.setStoredTag(this, it) }
+        vm.onSettingsChanged(); updateMotion()
+        return b
+    }
+
+    private fun exportSettingsTo(uri: Uri) {
+        val ok = runCatching {
+            contentResolver.openOutputStream(uri, "wt")!!.use { it.write(exportSettingsJson().toByteArray()) }
+        }.isSuccess
+        Toast.makeText(this, getString(if (ok) R.string.backup_export_ok else R.string.backup_export_failed), Toast.LENGTH_SHORT).show()
+    }
+
+    private fun importSettingsFrom(uri: Uri) {
+        val r = runCatching { importSettingsJson(contentResolver.openInputStream(uri)!!.use { it.readBytes().decodeToString() }) }
+        r.onSuccess { b ->
+            Toast.makeText(this, getString(R.string.backup_import_ok, b.fieldCount), Toast.LENGTH_SHORT).show()
+            if (!com.coactive.companion.settings.AppLocale.apply(this, b.settings.appLanguage)) recreate()
+        }.onFailure { Toast.makeText(this, getString(R.string.backup_import_failed), Toast.LENGTH_LONG).show() }
     }
 
     /** Sensor hanya aktif di foreground & bila diaktifkan di Pengaturan. */

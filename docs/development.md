@@ -110,7 +110,13 @@ These exist only in the `debug` and `compact` source sets or behind `BuildConfig
     -a com.coactive.companion.DEBUG_CONFIG --es llm_key "$GROQ_API_KEY" --es tts TIKTOK
   ```
   This puts the key on your shell command line, so prefer the Settings screen on shared machines.
-- **Settings export/import (`settings_sync.json`).** `am start -n com.coactive.companion/.MainActivity --ez debugExportSettings true` writes all settings, **including API keys**, to the app's private `files/settings_sync.json`. `--ez debugImportSettings true` reads that file and then deletes it. It's meant for copying a configuration between your own test devices with `run-as`. Don't share the file.
+- **Settings export/import (`kiko-settings.json`).** The same versioned JSON as *Settings → Back up & restore*, but at a fixed path in the app's external files dir (`/sdcard/Android/data/com.coactive.companion/files/`), so you can move it between your own test devices with `adb pull` / `adb push`:
+  ```bash
+  adb shell am start -n com.coactive.companion/.MainActivity --ez debugExportSettings true   # → files/kiko-settings.json
+  adb shell am start -n com.coactive.companion/.MainActivity --ez debugImportSettings true   # reads it, applies it, deletes it
+  adb shell am start -n com.coactive.companion/.MainActivity --ez debugSettingsSummary true  # → files/kiko-settings-summary.json
+  ```
+  The export file contains **every API key and token in plain text**. Never `cat` it or commit it, and delete it once it's imported. Import also accepts the older v1 `settings_sync.json` from the app's private `files/` dir. Export and import also write `kiko-settings-summary.json`: the non-secret values as-is and each secret only as `sha256:…`, so you can diff two devices without exposing keys. Delete it afterwards too.
 - **`--es debugWeather RAIN|COLD|HOT`** previews the weather reactions. Add `--ez noDance true` to keep the ambient effect (e.g. the snow) on screen.
 - **`--es debugAsk "search the web for …"`** sends a text turn through the voice pipeline (thinking → tools → TTS), so you can watch the activity indicators on the home face without speaking.
 

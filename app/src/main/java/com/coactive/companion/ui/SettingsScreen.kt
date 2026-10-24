@@ -34,6 +34,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.SettingsBackupRestore
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.ExpandMore
@@ -119,6 +120,10 @@ fun SettingsScreen(
     manualDance: Boolean = false,
     onToggleDance: () -> Unit = {},
     onClearConversation: () -> Unit = {},
+    /** Cadangkan & pulihkan (SAF): tulis/baca file JSON pengaturan. */
+    onExportSettings: () -> Unit = {},
+    /** Dipanggil setelah pengguna mengonfirmasi impor (lalu MainActivity membuka pemilih file). */
+    onImportSettings: () -> Unit = {},
 ) {
     var d by remember { mutableStateOf(initial) }
     val def = remember { AppSettings() }
@@ -275,6 +280,8 @@ fun SettingsScreen(
 
                 SpotifySettingsSection(d, { d = it }, spotifyStatus, onSpotifyLogin, onSpotifyLogout, onSpotapiPair, onSpotapiConnect, onSpotapiDisconnect, onSpotapiCheck)
 
+                BackupCard(onExportSettings, onImportSettings)
+
                 AboutCard()
 
                 Button(onClick = { onSave(d) }, shape = RoundedCornerShape(14.dp),
@@ -290,6 +297,27 @@ fun SettingsScreen(
 /* ------------------------------------------------------------------ */
 /*  Komponen kecil                                                     */
 /* ------------------------------------------------------------------ */
+
+/** Ekspor/impor semua pengaturan ke file JSON (pindah HP). File berisi API key → peringatan jelas. */
+@Composable
+private fun BackupCard(onExport: () -> Unit, onImport: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    var confirm by remember { mutableStateOf(false) }
+    SettingsCard(stringResource(R.string.backup_title), Icons.Filled.SettingsBackupRestore) {
+        Text(stringResource(R.string.backup_desc), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = onExport, modifier = Modifier.weight(1f).testTag("backupExport")) { Text(stringResource(R.string.backup_export)) }
+            OutlinedButton(onClick = { confirm = true }, modifier = Modifier.weight(1f).testTag("backupImport")) { Text(stringResource(R.string.backup_import)) }
+        }
+    }
+    if (confirm) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { confirm = false },
+        title = { Text(stringResource(R.string.backup_import_confirm_title)) },
+        text = { Text(stringResource(R.string.backup_import_confirm_body)) },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { confirm = false; onImport() }) { Text(stringResource(R.string.backup_import)) } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = { confirm = false }) { Text(stringResource(android.R.string.cancel)) } },
+    )
+}
 
 /** Versi aplikasi + tautan ke kode sumber & halaman rilis (unduh APK). */
 @Composable

@@ -259,4 +259,14 @@
     <string name="settings_about_version">Versi %1$s (%2$d)</string>
     <string name="settings_about_debug">build debug</string>
     <string name="settings_about_releases">Kode sumber &amp; rilis (unduh APK)</string>
+    <string name="backup_title">Cadangkan &amp; pulihkan</string>
+    <string name="backup_desc">Ekspor semua pengaturan (API key, token, suara, pencarian, Spotify) ke file JSON untuk memindahkan Kiko ke HP lain. File berisi key dalam teks biasa — simpan baik-baik dan hapus setelah diimpor.</string>
+    <string name="backup_export">Ekspor</string>
+    <string name="backup_import">Impor</string>
+    <string name="backup_import_confirm_title">Impor pengaturan?</string>
+    <string name="backup_import_confirm_body">Semua pengaturan di perangkat ini akan diganti dengan isi file. Perubahan yang belum disimpan di layar ini dibuang.</string>
+    <string name="backup_export_ok">Pengaturan diekspor</string>
+    <string name="backup_export_failed">Ekspor gagal</string>
+    <string name="backup_import_ok">Pengaturan diimpor (%1$d field)</string>
+    <string name="backup_import_failed">Bukan file pengaturan Kiko yang valid</string>
 </resources>
